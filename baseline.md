@@ -53,3 +53,25 @@ for the mobile run (screenshots in `screenshots/`).
   permutive, …).
 - Consent — OneTrust/Optanon ("603 partners"): render-blocking `OtAutoBlock.js`
   (900 ms) plus 395 ms of main-thread time, and a full-screen modal on first load.
+
+## Network Activity
+
+Captured 5 July 2026 from the DevTools Network panel (desktop, no throttling):
+fresh load, then a soft refresh. Transfer size first, uncompressed resource size
+in parentheses.
+
+- **protocol**: http/2 and http/3 (h3 via Alt-Svc; a few http/1.1)
+- **caching**
+  - first-party static assets: content-hashed, long TTL (served from cache on refresh)
+  - third-party ad/tracker calls: uncacheable, re-fetched every load
+- **compression**
+  - text (HTML/JS/CSS): br/gzip
+  - images/binary: none (already-compressed formats)
+
+### Desktop
+
+- **requests**: 2,338
+- **fresh**: 34.3 MB (87.2 MB)
+  - **js/css**: 7.8 MB (37.0 MB)
+  - **images**: 15.7 MB (20.8 MB)
+- **refresh**: 7.2 MB (78.9 MB)
