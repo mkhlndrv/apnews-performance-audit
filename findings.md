@@ -7,6 +7,50 @@ Insights/Diagnostics, networking from the DevTools Network panel, mobile from th
 throttled-mobile runs (Slow 4G + 4× CPU), and accessibility from a Lighthouse
 accessibility audit. See [baseline](baseline.md).
 
+## Prioritization (RICE)
+
+Corrective findings are ranked with **RICE** — Reach × Impact × Confidence ÷
+Effort — which gives one number so unrelated fixes (an image attribute, an
+accessibility label, an ad-stack cut) can be compared directly. It's deliberately
+subjective; the point is a consistent, written-down basis for "what first."
+
+Scales, tuned to this audit:
+
+- **Reach (1–10)** — how much of the audience hits it. 10 = every mobile load (the
+  primary profile); ~7 = a large subset (first visits, repeat visitors); ~3 = a
+  specific group (assistive-tech users, one page).
+- **Impact (0.5–3)** — severity per affected user. 3 = massive (blocks the main
+  content), 2 = high, 1 = medium, 0.5 = minor.
+- **Confidence (0.5–1.0)** — how sure the fix lands, given the evidence and how
+  much sits outside first-party control. 1.0 = measured and fully in our hands,
+  0.8 = solid, 0.6 = depends on third parties or a business call.
+- **Effort (1–5)** — rough person-weeks. 1 = an attribute or two; 3 = a
+  build/third-party loading rework; 5 = an org-level program (renegotiating the
+  ad stack).
+
+Score = (Reach × Impact × Confidence) ÷ Effort. Higher = do sooner. Good findings
+aren't scored — they're observations, not work.
+
+| # | Finding | R | I | C | E | Score | Tier |
+|---|---------|:-:|:-:|:--:|:-:|:-----:|:----:|
+| 1 | Main article image loads late (LCP) | 10 | 3 | 0.8 | 1 | **24.0** | High |
+| 2 | Blank screen before render (FCP) | 10 | 2 | 0.8 | 3 | **5.3** | High |
+| 3 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
+| 4 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
+| 5 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
+| 6 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
+| 7 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
+| 8 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
+| 9 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
+| 10 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+
+Two things the ranking makes explicit. The single highest-ROI fix is trivial —
+`fetchpriority` + preload on the lead image scores 24 because it's a one-line
+change straight at the failing metric. And the ad-stack cut (row 9) scores *low*
+not because it doesn't matter — it's the root of the byte weight — but because
+RICE divides by effort and that fix is an org-level, revenue-touching program.
+Read the low-scorers as "high value, expensive," not "skip."
+
 ## Rendering
 
 - The page is blank for several seconds before anything renders.
@@ -17,6 +61,7 @@ accessibility audit. See [baseline](baseline.md).
   - **Solution**:
     - Inline the critical CSS and load the rest non-blocking.
     - Split and defer `script.js`; load Parse.ly and the consent script without blocking render.
+  - **Priority (RICE)**: R 10 × I 2 × C 0.8 ÷ E 3 = **5.3** (High).
 
 - The main article image shows up late.
   - **Baseline**: LCP (38.6 s mobile lab / 2.9 s field — the field assessment fails on LCP).
@@ -25,6 +70,7 @@ accessibility audit. See [baseline](baseline.md).
     - It also sits behind the render-blocking chain above.
   - **Solution**:
     - Add `fetchpriority="high"` and a preload to the lead promo image.
+  - **Priority (RICE)**: R 10 × I 3 × C 0.8 ÷ E 1 = **24.0** (High — the top quick win: one attribute straight at the failing LCP).
 
 - The page can't be used while it's still loading.
   - **Baseline**: TBT (1,250 ms mobile / 4,650 ms desktop lab); main-thread work 21.2 s, JS execution 5.9 s.
@@ -32,6 +78,7 @@ accessibility audit. See [baseline](baseline.md).
     - Third-party ad and tracking scripts saturate the main thread — Rubicon 776 ms, Google Tag Manager 575 ms, Web Content Assessor 524 ms, Quantcast 491 ms, pub.network 423 ms.
   - **Solution**:
     - Load ad and analytics scripts after first paint, lazy-load below-fold ad slots, and break up the long tasks.
+  - **Priority (RICE)**: R 9 × I 2 × C 0.7 ÷ E 4 = **3.2** (Med).
 
 - Images don't load in the order the reader needs.
   - **Baseline**: Performance / LCP.
@@ -39,6 +86,7 @@ accessibility audit. See [baseline](baseline.md).
     - Only 2 of 106 images set a priority, so the browser can't tell the lead story image from ad creatives and below-fold photos — ads and secondary images often download before the headline image.
   - **Solution**:
     - `fetchpriority="high"` on the lead image and `fetchpriority="low"` / `loading="lazy"` on the rest.
+  - **Priority (RICE)**: R 8 × I 1 × C 0.8 ÷ E 2 = **3.2** (Med).
 
 - The consent wall makes the page look broken on first load.
   - **Baseline**: LCP / perceived load.
@@ -46,6 +94,7 @@ accessibility audit. See [baseline](baseline.md).
     - The OneTrust consent modal ("603 partners") covers the article on the first mobile load; its script is render-blocking (900 ms) and the ad stack waits on the consent choice, so the top of the page sits empty until it resolves.
   - **Solution**:
     - Paint the article underneath the modal immediately, load the consent script without blocking render, and hold non-essential vendors until after the user chooses.
+  - **Priority (RICE)**: R 7 × I 2 × C 0.6 ÷ E 3 = **2.8** (Med).
 
 ## Networking
 
@@ -68,6 +117,7 @@ accessibility audit. See [baseline](baseline.md).
     - Images account for 15.7 MB of the total.
   - **Solution**:
     - Cut the number of ad partners and bidders, lazy-load below-fold ad slots, and defer non-critical vendor scripts.
+  - **Priority (RICE)**: R 9 × I 2 × C 0.6 ÷ E 5 = **2.2** (Med — high value, but an org-level, revenue-touching program, so RICE ranks the ROI low).
 
 - Repeat visits barely get faster.
   - **Baseline**: repeat-view transfer 7.2 MB (vs 34.3 MB fresh).
@@ -75,6 +125,7 @@ accessibility audit. See [baseline](baseline.md).
     - First-party assets cache well, but the 2,000+ third-party ad/tracker requests are uncacheable and re-download on every visit.
   - **Solution**:
     - Caching can't fix this — reduce the ad/tracker calls themselves (fewer vendors, lazy-load, consolidate).
+  - **Priority (RICE)**: R 5 × I 1 × C 0.6 ÷ E 4 = **0.8** (Low).
 
 ## Mobile
 
@@ -90,6 +141,7 @@ matter, on mobile.
     - The render-blocking chain and the 20.4 MB fresh payload are tolerable on a fast desktop link but collapse on a slow mobile radio with a 4× slower CPU: the lead image is gated behind the whole download, and the main thread never clears.
   - **Solution**:
     - The rendering and networking fixes elsewhere in this report (inline critical CSS, defer JS, `fetchpriority` on the lead image, cut ad bytes and requests) pay off most here — budget and test against Slow 4G + 4× CPU, not a desktop link.
+  - **Priority (RICE)**: R 10 × I 3 × C 0.7 ÷ E 5 = **4.2** (High — an umbrella finding; its effort spans the fixes above, so it's scored as the mobile program overall).
 
 - Tap targets are too small and too close together.
   - **Baseline**: the Lighthouse accessibility audit flags 49 undersized or crowded touch targets. Mobile-only: a mouse pointer doesn't care, a thumb does.
@@ -97,6 +149,7 @@ matter, on mobile.
     - Nav links, share buttons and article-card links are sized and spaced for a cursor, so on a phone they fall under the ~24 px minimum and are easy to mis-tap.
   - **Solution**:
     - Give tap targets at least 24×24 CSS px (48×48 recommended) with enough spacing at the mobile breakpoint.
+  - **Priority (RICE)**: R 7 × I 1 × C 1.0 ÷ E 2 = **3.5** (Med).
 
 ### Good
 
@@ -114,3 +167,4 @@ matter, on mobile.
   - **Solution**:
     - Add `aria-label` to icon-only buttons and links, `alt` to images, and a `title` to the iframe.
     - Remove focusable children from `aria-hidden` regions, fix the heading order, and fix the contrast pair.
+  - **Priority (RICE)**: R 3 × I 2 × C 1.0 ÷ E 2 = **3.0** (Med).
