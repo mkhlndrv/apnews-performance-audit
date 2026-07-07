@@ -3,8 +3,9 @@
 Grouped by area, corrective findings first within each. Each finding is a
 distinct, independently observable problem — where several causes feed the same
 symptom, they sit under one finding. Rendering numbers come from the PSI mobile
-Insights/Diagnostics, networking from the DevTools Network panel, and
-accessibility from a Lighthouse accessibility audit. See [baseline](baseline.md).
+Insights/Diagnostics, networking from the DevTools Network panel, mobile from the
+throttled-mobile runs (Slow 4G + 4× CPU), and accessibility from a Lighthouse
+accessibility audit. See [baseline](baseline.md).
 
 ## Rendering
 
@@ -75,13 +76,41 @@ accessibility from a Lighthouse accessibility audit. See [baseline](baseline.md)
   - **Solution**:
     - Caching can't fix this — reduce the ad/tracker calls themselves (fewer vendors, lazy-load, consolidate).
 
+## Mobile
+
+Mobile is Google's primary ranking signal, and Slow 4G + 4× CPU is the condition
+most of AP's audience actually browses under. These findings only appear, or only
+matter, on mobile.
+
+### Corrective
+
+- On a real mobile connection the page barely loads.
+  - **Baseline**: throttled-mobile lab (Slow 4G + 4× CPU). PSI mobile LCP 38.6 s, FCP 6.3 s, Speed Index 17.1 s; a local applied-throttle run agrees (LCP 42.3 s, FCP 7.2 s, SI 25.8 s) and is so slow that Lighthouse can't finish a scored run (TBT returns `NO_TTI_CPU_IDLE_PERIOD` — the main thread never goes idle). Desktop lab LCP is 7.1 s — about 6× faster on the same page.
+  - **Cause**:
+    - The render-blocking chain and the 20.4 MB fresh payload are tolerable on a fast desktop link but collapse on a slow mobile radio with a 4× slower CPU: the lead image is gated behind the whole download, and the main thread never clears.
+  - **Solution**:
+    - The rendering and networking fixes elsewhere in this report (inline critical CSS, defer JS, `fetchpriority` on the lead image, cut ad bytes and requests) pay off most here — budget and test against Slow 4G + 4× CPU, not a desktop link.
+
+- Tap targets are too small and too close together.
+  - **Baseline**: the Lighthouse accessibility audit flags 49 undersized or crowded touch targets. Mobile-only: a mouse pointer doesn't care, a thumb does.
+  - **Cause**:
+    - Nav links, share buttons and article-card links are sized and spaced for a cursor, so on a phone they fall under the ~24 px minimum and are easy to mis-tap.
+  - **Solution**:
+    - Give tap targets at least 24×24 CSS px (48×48 recommended) with enough spacing at the mobile breakpoint.
+
+### Good
+
+- The layout stays stable on mobile.
+  - **Baseline**: CLS 0.06 (field) / 0.064 (local applied throttle) / 0.001 (PSI) — all under the 0.1 threshold.
+  - Despite the ad slots and lazy-loaded images, content doesn't jump around as it loads on a phone. CLS is the one Core Web Vital AP already passes on mobile — the mobile problem is load speed, not layout instability.
+
 ## Accessibility
 
 - Interactive controls and images are invisible to assistive technology.
-  - **Baseline**: PSI Accessibility 75 (mobile) / 79 (desktop); a Lighthouse accessibility audit flags eight issue types.
+  - **Baseline**: PSI Accessibility 75 (mobile) / 79 (desktop); a Lighthouse accessibility audit flags eight issue types (the undersized-tap-target one is in the Mobile section above).
   - **Cause**:
     - 2 buttons and 2 links have no accessible name; 4 images have no `alt`; 1 iframe has no title.
-    - 29 `aria-hidden` elements contain focusable descendants; headings aren't in sequential order; 49 touch targets are too small or too close; one text/background pair fails contrast.
+    - 29 `aria-hidden` elements contain focusable descendants; headings aren't in sequential order; one text/background pair fails contrast.
   - **Solution**:
     - Add `aria-label` to icon-only buttons and links, `alt` to images, and a `title` to the iframe.
-    - Remove focusable children from `aria-hidden` regions, fix the heading order, enlarge/space the touch targets, and fix the contrast pair.
+    - Remove focusable children from `aria-hidden` regions, fix the heading order, and fix the contrast pair.

@@ -1,8 +1,9 @@
 # Baseline
 
 Primary page: https://apnews.com/. Core Web Vitals and PageSpeed Insights
-captured 3 July 2026 (Lighthouse 13.4.0); networking captured 5 July 2026 from
-the DevTools Network panel. Screenshots in `screenshots/`.
+captured 3 July 2026 (Lighthouse 13.4.0); networking captured 5 July 2026 and the
+local applied-throttle Lighthouse run 8 July 2026, both from DevTools. Screenshots
+in `screenshots/`.
 
 ## Core Web Vitals
 
@@ -27,8 +28,11 @@ LCP is above the 2.0 s "good" threshold (tightened March 2026); INP and CLS pass
 
 ## PageSpeed Insights at `/`
 
-Lab data (Lighthouse). Mobile is an emulated Moto G Power on Slow 4G; desktop is
-the emulated desktop profile.
+Lab data (Lighthouse). Mobile is throttled to the class setting — **Slow 4G with
+a 4× CPU slowdown, applied (not simulated)** — on an emulated mid-range phone
+(Moto G Power); desktop uses the emulated desktop profile with no throttling.
+Mobile is the primary signal (mobile-first indexing), so the mobile column is the
+one the findings track.
 
 ### Desktop
 
@@ -52,10 +56,34 @@ Metrics: FCP 6.3 s · LCP 38.6 s · TBT 1,250 ms · CLS 0.001 · Speed Index 17.
 
 Worst on mobile: LCP 38.6 s, Speed Index 17.1 s, FCP 6.3 s, TBT 1,250 ms.
 
+## Local Lighthouse — Applied throttling (mobile)
+
+Step 2 of the class method: a local Lighthouse run in DevTools with **applied**
+throttling (the "DevTools throttling" option — Slow 4G + 4× CPU, not simulated),
+to sit next to the PSI mobile column and check it against a second setup.
+Screenshots in `screenshots/04-mobile-throttling/`.
+
+- **FCP**: 7.2 s
+- **LCP**: 42.3 s
+- **Speed Index**: 25.8 s
+- **CLS**: 0.064
+- **TBT**: did not compute — Lighthouse returned `NO_TTI_CPU_IDLE_PERIOD` (the
+  main thread never went idle), and the overall Performance score errored because
+  "the page loaded too slowly to finish within the time limit."
+
+This lines up with PSI mobile (LCP 42.3 s vs 38.6 s, FCP 7.2 s vs 6.3 s) and goes
+one step further: under the real class throttle the page is so slow that
+Lighthouse can't finish a scored run at all. Two caveats — the run wasn't in a
+fresh Incognito profile (Lighthouse warned about stored IndexedDB data) and it
+timed out before finishing, so it's corroboration of PSI, not a clean
+median-of-3.
+
 ## Network Activity
 
 DevTools Network panel — fresh load, then a soft refresh. Transfer size first,
-uncompressed resource size in parentheses.
+uncompressed resource size in parentheses. These are byte and request counts, so
+they don't change with throttling; the mobile *timing* under the class throttle is
+in the two sections above.
 
 - **protocol**: http/2 and http/3 (h3 via Alt-Svc; a few http/1.1)
 - **caching**
@@ -109,8 +137,11 @@ Where the time and bytes go — the causes `findings.md` builds on. Screenshots 
 ## Note on method
 
 Scores are from PageSpeed Insights, which runs Lighthouse on Google's
-infrastructure — a clean run without local-machine noise. Mobile is weighted as
+infrastructure — a clean run without local-machine noise, and it applies the same
+Slow 4G + 4× CPU mobile throttle the class specifies. Mobile is weighted as
 primary (mobile-first indexing); since Lighthouse can't measure INP, TBT is the
-lab proxy. Diagnostics come from the same PSI report's Insights/Diagnostics; the
-accessibility failures are from a separate Lighthouse accessibility audit of the
-page.
+lab proxy. The local Lighthouse section is the class's "applied, not simulated"
+throttle run on my own machine; it corroborates PSI but wasn't a clean Incognito
+median-of-3, so PSI stays the primary number. Diagnostics come from the same PSI
+report's Insights/Diagnostics; the accessibility failures are from a separate
+Lighthouse accessibility audit of the page.
