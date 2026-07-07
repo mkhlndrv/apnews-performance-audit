@@ -1,111 +1,87 @@
 # Findings
 
-Findings from the [baseline](baseline.md), grouped by area, worst first within
-each. Rendering numbers come from the PageSpeed Insights mobile Insights and
-Diagnostics; networking numbers come from the DevTools Network panel (both for
-https://apnews.com/).
+Grouped by area, corrective findings first within each. Each finding is a
+distinct, independently observable problem — where several causes feed the same
+symptom, they sit under one finding. Rendering numbers come from the PSI mobile
+Insights/Diagnostics, networking from the DevTools Network panel, and
+accessibility from a Lighthouse accessibility audit. See [baseline](baseline.md).
 
-## Page load & rendering
+## Rendering
 
-- The main article image appears far too late.
-  - **Metric**: LCP (38.6 s lab, 2.9 s field — the field assessment fails on LCP).
-  - **Cause**: PSI's LCP element is the lead article promo image
-    (`div.PagePromo-media img`, `dims.apnews.com`, 725×485). It is discoverable in
-    the HTML and not lazy-loaded, but `fetchpriority="high"` is not applied, so it
-    isn't fetched ahead of the ad and tracking traffic.
-  - **Solution**: add `fetchpriority="high"` (and a preload) to the lead promo
-    image, and `fetchpriority="low"` / `loading="lazy"` to the images below it.
+- The page is blank for several seconds before anything renders.
+  - **Baseline**: FCP (6.3 s mobile lab). TTFB is fine at 0.2 s, so it isn't the server.
+  - **Cause**:
+    - A 105.6 KiB stylesheet (`All.min.css`) and a 41.5 KiB first-party script (`script.js`) are render-blocking.
+    - Parse.ly and the OneTrust consent script (`OtAutoBlock.js`) also sit in the critical path (PSI estimates 740 ms).
+  - **Solution**:
+    - Inline the critical CSS and load the rest non-blocking.
+    - Split and defer `script.js`; load Parse.ly and the consent script without blocking render.
 
-- The screen stays blank for several seconds before anything renders.
-  - **Metric**: FCP (6.3 s). PSI "render-blocking requests" estimates 740 ms.
-  - **Cause**: a 105.6 KiB stylesheet (`All.min.css`, 4,800 ms) and a 41.5 KiB
-    first-party script (`script.js`, 2,850 ms) block the first paint, along with
-    Parse.ly (1,310 ms).
-  - **Solution**: inline the critical CSS and load the rest non-blocking, and
-    split and defer `script.js` so the first paint doesn't wait on it.
+- The main article image shows up late.
+  - **Baseline**: LCP (38.6 s mobile lab / 2.9 s field — the field assessment fails on LCP).
+  - **Cause**:
+    - The lead promo image (`div.PagePromo-media img`, `dims.apnews.com`, 725×485) has no `fetchpriority`, so it competes with ~2,300 other requests instead of loading first.
+    - It also sits behind the render-blocking chain above.
+  - **Solution**:
+    - Add `fetchpriority="high"` and a preload to the lead promo image.
 
-- The page freezes and can't respond while scripts run.
-  - **Metric**: TBT (1,250 ms). PSI puts main-thread work at 21.2 s and
-    JavaScript execution at 5.9 s.
-  - **Cause**: the main thread is saturated by first-party script plus ad and
-    analytics vendors each burning hundreds of ms — Rubicon 776 ms, Google Tag
-    Manager 575 ms, Web Content Assessor 524 ms, Quantcast 491 ms, pub.network
-    423 ms.
-  - **Solution**: load ad and analytics scripts after first paint, lazy-load the
-    below-fold ad slots, and break up the long tasks.
+- The page can't be used while it's still loading.
+  - **Baseline**: TBT (1,250 ms mobile / 4,650 ms desktop lab); main-thread work 21.2 s, JS execution 5.9 s.
+  - **Cause**:
+    - Third-party ad and tracking scripts saturate the main thread — Rubicon 776 ms, Google Tag Manager 575 ms, Web Content Assessor 524 ms, Quantcast 491 ms, pub.network 423 ms.
+  - **Solution**:
+    - Load ad and analytics scripts after first paint, lazy-load below-fold ad slots, and break up the long tasks.
 
-- The page pulls in far too many ad and analytics vendors.
-  - **Metric**: Speed Index (17.1 s); it also feeds TBT.
-  - **Cause**: the heaviest third parties by transfer are Rubicon Project
-    (385 KiB) and Google Tag Manager (330 KiB), on top of ~20 more vendors in the
-    diagnostics (Viafoura, Kameleoon, Amazon Ads, Doubleclick, Wunderkind,
-    Quantcast, permutive, pub.network, and others).
-  - **Solution**: cut the number of ad partners, lazy-load ad slots, and defer
-    non-critical vendor scripts until after the content is up.
+- Images don't load in the order the reader needs.
+  - **Baseline**: Performance / LCP.
+  - **Cause**:
+    - Only 2 of 106 images set a priority, so the browser can't tell the lead story image from ad creatives and below-fold photos — ads and secondary images often download before the headline image.
+  - **Solution**:
+    - `fetchpriority="high"` on the lead image and `fetchpriority="low"` / `loading="lazy"` on the rest.
 
-- The consent manager blocks rendering and gates the vendor load.
-  - **Metric**: FCP / perceived load.
-  - **Cause**: the OneTrust/Optanon consent script (`cdn.cookielaw.org`,
-    "603 partners") is render-blocking — `OtAutoBlock.js` alone costs 900 ms on
-    the critical path — and its full-screen modal covers the article on first
-    load, with much of the ad stack waiting on the consent choice.
-  - **Solution**: load the consent script without blocking render, paint the
-    article underneath the modal immediately, and hold non-essential vendors until
-    after the user chooses.
+- The consent wall makes the page look broken on first load.
+  - **Baseline**: LCP / perceived load.
+  - **Cause**:
+    - The OneTrust consent modal ("603 partners") covers the article on the first mobile load; its script is render-blocking (900 ms) and the ad stack waits on the consent choice, so the top of the page sits empty until it resolves.
+  - **Solution**:
+    - Paint the article underneath the modal immediately, load the consent script without blocking render, and hold non-essential vendors until after the user chooses.
 
 ## Networking
 
-Numbers from the DevTools Network panel (desktop, fresh load then soft refresh) —
-see `baseline.md` → Network Activity.
-
 ### Good
 
-- Text compression is working.
-  - **Metric**: network compression.
-  - JS and CSS ship br/gzip: 37.0 MB uncompressed comes down as 7.8 MB (~79 %
-    reduction). Images aren't gzipped, which is correct — they're already
-    compressed formats.
+- Text compression is effective.
+  - **Baseline**: network compression.
+  - JS and CSS ship br/gzip — 37.0 MB uncompressed comes down as 7.8 MB (~79 %). Images aren't gzipped, which is correct: they're already compressed formats.
 
-- First-party caching is working.
-  - **Metric**: network caching.
-  - Static assets are content-hashed with a long TTL, so a soft refresh drops
-    transfer from 34.3 MB to 7.2 MB — about 79 % less over the wire.
+- First-party caching is effective.
+  - **Baseline**: network caching.
+  - Static assets are content-hashed with a long TTL, so a soft refresh drops transfer from 34.3 MB to 7.2 MB (~79 % less over the wire).
 
-### Worst
+### Corrective
 
-- One visit downloads ~34 MB across 2,338 requests.
-  - **Users**: on a phone plan or a slow connection this is expensive and slow,
-    and the page keeps requesting for over two minutes.
-  - **Metric**: total transfer (34.3 MB) and request count (2,338); feeds Speed
-    Index and TBT.
-  - **Cause**: most of those requests are third-party ad, bidding and tracking
-    calls (Rubicon/prebid, GTM, dozens of vendors), not content.
-  - **Solution**: cut the number of ad partners and bidders, lazy-load below-fold
-    ad slots, and drop non-essential trackers.
+- One visit downloads far too much.
+  - **Baseline**: total transfer 34.3 MB across 2,338 requests — expensive on a phone plan and slow on a weak connection.
+  - **Cause**:
+    - The ad/bidding/tracking stack — Rubicon 385 KiB, Google Tag Manager 330 KiB, and ~20 more vendors.
+    - Images account for 15.7 MB of the total.
+  - **Solution**:
+    - Cut the number of ad partners and bidders, lazy-load below-fold ad slots, and defer non-critical vendor scripts.
 
-- Images are the single biggest download.
-  - **Users**: images are 15.7 MB of the 34.3 MB — the bulk of what a visitor
-    pulls, and slow to fill in on mobile.
-  - **Metric**: image transfer (15.7 MB); LCP and Speed Index.
-  - **Cause**: 714 image requests, not all in next-gen formats or sized to their
-    display box.
-  - **Solution**: serve WebP/AVIF, use responsive `srcset`/`sizes`, and lazy-load
-    offscreen images.
+- Repeat visits barely get faster.
+  - **Baseline**: repeat-view transfer 7.2 MB (vs 34.3 MB fresh).
+  - **Cause**:
+    - First-party assets cache well, but the 2,000+ third-party ad/tracker requests are uncacheable and re-download on every visit.
+  - **Solution**:
+    - Caching can't fix this — reduce the ad/tracker calls themselves (fewer vendors, lazy-load, consolidate).
 
-- The JavaScript payload is enormous.
-  - **Users**: 663 script files and 37 MB of uncompressed JS to download, parse
-    and run — this is what makes the page freeze (see the TBT finding above).
-  - **Metric**: JS transfer 7.8 MB / 37.0 MB uncompressed, 663 requests; TBT.
-  - **Cause**: third-party ad and tracking scripts dominate both the count and
-    the volume.
-  - **Solution**: defer and cut third-party JS, load it after first paint, and
-    remove unused code.
+## Accessibility
 
-- Caching can't touch the part that hurts.
-  - **Users**: a repeat visit still pulls 7.2 MB, because the ad and tracker
-    calls re-run every time even though the site's own assets come from cache.
-  - **Metric**: repeat-view transfer (7.2 MB vs 34.3 MB fresh).
-  - **Cause**: the 2,000+ third-party ad/tracker requests are uncacheable by
-    design.
-  - **Solution**: the lever isn't caching — it's making fewer ad/tracker calls
-    (fewer vendors, lazy-load, consolidate).
+- Interactive controls and images are invisible to assistive technology.
+  - **Baseline**: PSI Accessibility 75 (mobile) / 79 (desktop); a Lighthouse accessibility audit flags eight issue types.
+  - **Cause**:
+    - 2 buttons and 2 links have no accessible name; 4 images have no `alt`; 1 iframe has no title.
+    - 29 `aria-hidden` elements contain focusable descendants; headings aren't in sequential order; 49 touch targets are too small or too close; one text/background pair fails contrast.
+  - **Solution**:
+    - Add `aria-label` to icon-only buttons and links, `alt` to images, and a `title` to the iframe.
+    - Remove focusable children from `aria-hidden` regions, fix the heading order, enlarge/space the touch targets, and fix the contrast pair.
