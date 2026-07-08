@@ -138,7 +138,7 @@ are bundled. See the [baseline](baseline.md) bundle analysis. (Source maps are
 handled correctly — not exposed in production — so that's not a finding here.)
 
 - The CSS ships as one ~770 KB site-wide bundle, mostly unused per page.
-  - **Baseline**: a single `All.min.css` — ~770 KB uncompressed (105.6 KiB brotli) — loaded render-blocking on every page.
+  - **Baseline**: a single `All.min.css` — ~770 KB uncompressed (105.6 KiB brotli), render-blocking on every page; DevTools Coverage measures **88% unused** on the homepage (694 KB of 788 KB).
   - **Cause**:
     - No per-route or per-component CSS splitting: the whole design system (article, gallery, search and donate templates) ships on the homepage, where almost none of it applies.
   - **Solution**:
@@ -154,7 +154,7 @@ handled correctly — not exposed in production — so that's not a finding here
   - **Priority (RICE)**: R 9 × I 1 × C 0.9 ÷ E 2 = **4.1** (High).
 
 - First-party JavaScript ships as one un-split bundle.
-  - **Baseline**: a single `All.min.js` (~450 KB uncompressed) plus a blocking `apcdp.apnews.com/script.js`; no route or component splitting.
+  - **Baseline**: a single `All.min.js` (~450 KB uncompressed, **84% unused** per Coverage — 381 KB of 452 KB) plus a blocking `apcdp.apnews.com/script.js`; no route or component splitting.
   - **Cause**:
     - Everything is concatenated into one "All" bundle, so the homepage parses and executes code for templates it never renders. Tree-shaking can't help across a deliberately-concatenated file.
   - **Solution**:

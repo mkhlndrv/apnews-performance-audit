@@ -137,7 +137,11 @@ Where the time and bytes go — the causes `findings.md` builds on. Screenshots 
 ## Bundle analysis
 
 How the build outputs are shipped (Day 7 method). Inspected live on the homepage
-with DevTools on 8 July 2026; third-party costs are from the PSI mobile report.
+with DevTools on 8 July 2026; third-party costs are from the PSI mobile report, and
+unused-code figures from the DevTools Coverage tab (screenshots in
+`screenshots/05-bundles/`). Coverage on a fresh load shows the page executes only
+**38% of the 35.2 MB** of JS and CSS it pulls — **21.8 MB downloaded and never
+used**.
 
 ### JavaScript
 
@@ -147,9 +151,10 @@ with DevTools on 8 July 2026; third-party costs are from the PSI mobile report.
   `apcdp.apnews.com/script.js` (consent/data-platform, no `async`/`defer`). There's
   no route- or component-level splitting — the homepage loads the same "All" bundle
   every page would.
-- **Unused JS** — a single site-wide bundle means the homepage ships code for
-  templates it never renders. Tree-shaking can't remove what's deliberately
-  concatenated into one file.
+- **Unused JS** — Coverage measures **84% of the bundle unused** on the homepage
+  (381 KB of 452 KB); a single site-wide bundle ships code for templates it never
+  renders, and tree-shaking can't remove what's deliberately concatenated into one
+  file.
 - **Source maps** — none exposed: `All.min.js.map` returns 404 and the bundle has
   no `sourceMappingURL`. Correct for production (Day 7: maps shouldn't be public).
 
@@ -158,9 +163,9 @@ with DevTools on 8 July 2026; third-party costs are from the PSI mobile report.
 - **Bundling** — same pattern: one `All.min.<hash>.gz.css`, **~770 KB uncompressed**
   (105.6 KiB brotli). Single site-wide stylesheet, no per-route/component splitting,
   and render-blocking.
-- **Unused CSS** — a 770 KB global sheet on the homepage is nearly all unused; most
-  selectors target the article, gallery, search and donate templates that aren't on
-  this page.
+- **Unused CSS** — Coverage measures **88% of the bundle unused** on the homepage
+  (694 KB of 788 KB): most selectors target the article, gallery, search and donate
+  templates that aren't on this page.
 - Third-party CSS adds 7 more stylesheets (Google Fonts ×2, Bounce Exchange,
   Viafoura ×3, Primis).
 
@@ -195,6 +200,10 @@ with DevTools on 8 July 2026; third-party costs are from the PSI mobile report.
   446 ms are the heaviest by transfer; Web Content Assessor (524 ms), Quantcast
   (491 ms) and pub.network (423 ms) are the heaviest on the main thread, across
   ~20+ more vendors. This is the bulk of both the byte weight and the blocking.
+- **Unused at load** (Coverage) — the biggest single blocks of dead code are all
+  third-party video/ad scripts, pulled in full but barely run on the homepage:
+  ntv.io `load.js` (729 KB unused), Google reCAPTCHA (598 KB), Primis HLS (496 KB)
+  and sekindo `liveVideo` (482 KB).
 
 ## Note on method
 
