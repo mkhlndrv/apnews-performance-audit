@@ -134,6 +134,68 @@ Where the time and bytes go — the causes `findings.md` builds on. Screenshots 
   `aria-hidden` regions with focusable descendants (29), heading order, 49
   undersized touch targets, and one contrast failure.
 
+## Bundle analysis
+
+How the build outputs are shipped (Day 7 method). Inspected live on the homepage
+with DevTools on 8 July 2026; third-party costs are from the PSI mobile report.
+
+### JavaScript
+
+- **Bundling** — first-party JS ships as a single concatenated bundle,
+  `All.min.<hash>.gz.js` (~450 KB uncompressed), content-hashed and pre-gzipped,
+  plus a deferred `webcomponents-loader` polyfill and a blocking
+  `apcdp.apnews.com/script.js` (consent/data-platform, no `async`/`defer`). There's
+  no route- or component-level splitting — the homepage loads the same "All" bundle
+  every page would.
+- **Unused JS** — a single site-wide bundle means the homepage ships code for
+  templates it never renders. Tree-shaking can't remove what's deliberately
+  concatenated into one file.
+- **Source maps** — none exposed: `All.min.js.map` returns 404 and the bundle has
+  no `sourceMappingURL`. Correct for production (Day 7: maps shouldn't be public).
+
+### CSS
+
+- **Bundling** — same pattern: one `All.min.<hash>.gz.css`, **~770 KB uncompressed**
+  (105.6 KiB brotli). Single site-wide stylesheet, no per-route/component splitting,
+  and render-blocking.
+- **Unused CSS** — a 770 KB global sheet on the homepage is nearly all unused; most
+  selectors target the article, gallery, search and donate templates that aren't on
+  this page.
+- Third-party CSS adds 7 more stylesheets (Google Fonts ×2, Bounce Exchange,
+  Viafoura ×3, Primis).
+
+### Images
+
+- **Sizes/formats** — images run through the `dims.apnews.com` proxy, which outputs
+  **WebP at quality 90** and resizes per request, so format is modern and variants
+  are generated at serve time. 68 of 100 `<img>` carry `srcset` and 56 are
+  `loading="lazy"`.
+- **Missing `sizes`** — 0 of those 68 responsive images set a `sizes` attribute, so
+  the browser assumes the image is 100vw and tends to pick a larger `srcset`
+  candidate than the slot needs.
+- **Full-resolution is exposed** — the proxy URL carries `?url=<original>` pointing
+  straight at the multi-megapixel source on `assets.apnews.com` (crops reveal
+  6000×4000 and 5870×3913 originals), and the `resize/` path segment is editable, so
+  any size — including the full-res original — can be requested as WebP.
+
+### Third-party resources
+
+- **Inventory** — ~46 distinct third-party domains on the homepage (800+ script
+  requests over the full load). Almost all are ads / real-time bidding / identity /
+  data-management: Google (GPT, DoubleClick, GTM, IMA), Amazon APS, Criteo,
+  pub.network, Bounce Exchange, Dianomi, Connatix, Primis, JW Player, ID5,
+  Permutive, Lotame (`crwdcntrl`), BlueConic, Nativo (`postrelease`), Parse.ly,
+  comScore, Sailthru, Kameleoon, OneSignal, Viafoura, Zephr — plus obscure ones with
+  no obvious owner (`usablenet`, `kidpowers`, `wknd.ai`, `tru.am`, `riverdrop`,
+  `rapidedge`, `html-load.cc`).
+- **Loading** — most load `async`, but several load synchronously and block render
+  (Primis, Dianomi, a Parse.ly experiments script, Riverdrop), and the first-party
+  `script.js` is blocking too.
+- **Impact** (PSI mobile) — Rubicon 385 KiB / 591 ms and Google Tag Manager 330 KiB /
+  446 ms are the heaviest by transfer; Web Content Assessor (524 ms), Quantcast
+  (491 ms) and pub.network (423 ms) are the heaviest on the main thread, across
+  ~20+ more vendors. This is the bulk of both the byte weight and the blocking.
+
 ## Note on method
 
 Scores are from PageSpeed Insights, which runs Lighthouse on Google's

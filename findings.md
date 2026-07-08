@@ -4,8 +4,9 @@ Grouped by area, corrective findings first within each. Each finding is a
 distinct, independently observable problem — where several causes feed the same
 symptom, they sit under one finding. Rendering numbers come from the PSI mobile
 Insights/Diagnostics, networking from the DevTools Network panel, mobile from the
-throttled-mobile runs (Slow 4G + 4× CPU), and accessibility from a Lighthouse
-accessibility audit. See [baseline](baseline.md).
+throttled-mobile runs (Slow 4G + 4× CPU), accessibility from a Lighthouse
+accessibility audit, and build-output findings from inspecting the shipped
+bundles. See [baseline](baseline.md).
 
 ## Prioritization (RICE)
 
@@ -35,14 +36,17 @@ aren't scored — they're observations, not work.
 |---|---------|:-:|:-:|:--:|:-:|:-----:|:----:|
 | 1 | Main article image loads late (LCP) | 10 | 3 | 0.8 | 1 | **24.0** | High |
 | 2 | Blank screen before render (FCP) | 10 | 2 | 0.8 | 3 | **5.3** | High |
-| 3 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
-| 4 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
-| 5 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
-| 6 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
-| 7 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
-| 8 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
-| 9 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
-| 10 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+| 3 | CSS bundle ships ~770 KB, mostly unused | 10 | 2 | 0.7 | 3 | **4.7** | High |
+| 4 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
+| 5 | Responsive images set `srcset` but no `sizes` | 9 | 1 | 0.9 | 2 | **4.1** | High |
+| 6 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
+| 7 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
+| 8 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
+| 9 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
+| 10 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
+| 11 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
+| 12 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
+| 13 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
 
 Two things the ranking makes explicit. The single highest-ROI fix is trivial —
 `fetchpriority` + preload on the lead image scores 24 because it's a one-line
@@ -126,6 +130,36 @@ Read the low-scorers as "high value, expensive," not "skip."
   - **Solution**:
     - Caching can't fix this — reduce the ad/tracker calls themselves (fewer vendors, lazy-load, consolidate).
   - **Priority (RICE)**: R 5 × I 1 × C 0.6 ÷ E 4 = **0.8** (Low).
+
+## Build output
+
+Findings from the shipped build outputs (Day 7) — how the JS, CSS and image assets
+are bundled. See the [baseline](baseline.md) bundle analysis. (Source maps are
+handled correctly — not exposed in production — so that's not a finding here.)
+
+- The CSS ships as one ~770 KB site-wide bundle, mostly unused per page.
+  - **Baseline**: a single `All.min.css` — ~770 KB uncompressed (105.6 KiB brotli) — loaded render-blocking on every page.
+  - **Cause**:
+    - No per-route or per-component CSS splitting: the whole design system (article, gallery, search and donate templates) ships on the homepage, where almost none of it applies.
+  - **Solution**:
+    - Extract the critical CSS the page needs and load the rest non-blocking; split the sheet per route/component so a page only ships what it renders.
+  - **Priority (RICE)**: R 10 × I 2 × C 0.7 ÷ E 3 = **4.7** (High).
+
+- Responsive images set `srcset` but no `sizes`.
+  - **Baseline**: 68 of 100 `<img>` carry `srcset`; 0 set a `sizes` attribute.
+  - **Cause**:
+    - With no `sizes`, the browser assumes each image is 100vw and picks a larger `srcset` candidate than the slot needs — over-fetching bytes the layout never uses.
+  - **Solution**:
+    - Add a correct `sizes` to each responsive image so the browser can choose the smallest candidate that fits the slot.
+  - **Priority (RICE)**: R 9 × I 1 × C 0.9 ÷ E 2 = **4.1** (High).
+
+- First-party JavaScript ships as one un-split bundle.
+  - **Baseline**: a single `All.min.js` (~450 KB uncompressed) plus a blocking `apcdp.apnews.com/script.js`; no route or component splitting.
+  - **Cause**:
+    - Everything is concatenated into one "All" bundle, so the homepage parses and executes code for templates it never renders. Tree-shaking can't help across a deliberately-concatenated file.
+  - **Solution**:
+    - Split by route and lazy-load heavy or rarely-used components on interaction/visibility, so each page ships only the JS it needs.
+  - **Priority (RICE)**: R 10 × I 1 × C 0.6 ÷ E 4 = **1.5** (Low).
 
 ## Mobile
 
