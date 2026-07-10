@@ -205,6 +205,51 @@ used**.
   ntv.io `load.js` (729 KB unused), Google reCAPTCHA (598 KB), Primis HLS (496 KB)
   and sekindo `liveVideo` (482 KB).
 
+## Rendering, frames and layers
+
+Day 8 pass — DevTools Performance flame chart, the Coverage tab and a scripted
+scroll, run through my browser connection on 10 July 2026 (AP isn't
+Cloudflare-blocked, so this is measured directly, not from screenshots).
+
+### Critical CSS
+
+- The head inlines ~145 KB of CSS across 19 `<style>` blocks, but the full
+  **801 KB `All.min.css` still loads render-blocking** — so the critical-CSS
+  extraction doesn't pay off: the big sheet is never deferred. The trace's
+  RenderBlocking insight estimates **~1,166 ms of FCP** is spent waiting on it.
+- Unused CSS is 88% of `All.min.css` and unused JS is 84% of `All.min.js`
+  (Coverage), and the unused CSS is still fully parsed each load ("parse time
+  scales with total CSS bytes"). Sources are in the bundle analysis above — the
+  monolithic first-party bundles plus third-party video/ad scripts.
+
+### Flame chart — frames
+
+- **Load** — lab LCP 1.59 s is **92% render delay** (1,467 ms); the main thread is
+  the bottleneck, not the network. A first-party Puzzmo-promo handler forces
+  **180 ms** of synchronous layout (forced reflow), and third-party ad/video scripts
+  (pub.network, Primis, Viafoura, Google GPT, Kameleoon) each thrash layout on top.
+- **Scroll** (4× CPU) — scrolling the 17,800 px page holds only **~28 fps**: 41% of
+  frames miss the 16.7 ms budget, **20% take over 33 ms** (a dropped frame or more),
+  and the worst frame stalls **376 ms**. The causes are scroll-linked forced reflows
+  (first-party `updateScrollShades`, Primis `checkResize`), a **9,569-node DOM**, and
+  ~48 ad iframes repainting. So yes — frames drop, and for a news homepage the amount
+  is excessive.
+
+### Layers and animations
+
+- **Paint layers** — the Layers panel isn't reachable through automation, but the
+  promotion triggers are: **48 iframes/videos** (ad slots, each typically its own
+  composite layer), 5 `position: fixed` and 3 `sticky` elements, and 31 elements with
+  a transform — dozens of layers, dominated by ad iframes. Excess layers slow
+  compositing itself.
+- **Needless promotion** — `All.min.css` carries **3 `translateZ(0)` GPU hacks** and
+  2 `will-change` rules (the always-on promotion the lesson warns about); applied
+  broadly they add GPU memory for no animation benefit.
+- **Animation triggers** — 8 `@keyframes`, 13 `animation` and 72 `transition`
+  declarations. The animated properties are mostly `transform`/`opacity` (composite,
+  GPU-friendly), so the animations themselves aren't the jank source — the jank is the
+  layout thrashing and DOM/iframe weight above.
+
 ## Note on method
 
 Scores are from PageSpeed Insights, which runs Lighthouse on Google's

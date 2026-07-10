@@ -5,8 +5,8 @@ distinct, independently observable problem — where several causes feed the sam
 symptom, they sit under one finding. Rendering numbers come from the PSI mobile
 Insights/Diagnostics, networking from the DevTools Network panel, mobile from the
 throttled-mobile runs (Slow 4G + 4× CPU), accessibility from a Lighthouse
-accessibility audit, and build-output findings from inspecting the shipped
-bundles. See [baseline](baseline.md).
+accessibility audit, build-output findings from inspecting the shipped bundles, and
+frames/layers findings from a Performance trace. See [baseline](baseline.md).
 
 ## Prioritization (RICE)
 
@@ -39,14 +39,17 @@ aren't scored — they're observations, not work.
 | 3 | CSS bundle ships ~770 KB, mostly unused | 10 | 2 | 0.7 | 3 | **4.7** | High |
 | 4 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
 | 5 | Responsive images set `srcset` but no `sizes` | 9 | 1 | 0.9 | 2 | **4.1** | High |
-| 6 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
-| 7 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
-| 8 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
-| 9 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
-| 10 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
-| 11 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
-| 12 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
-| 13 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+| 6 | Critical CSS not extracted; full sheet blocks paint | 10 | 2 | 0.6 | 3 | **4.0** | High |
+| 7 | Scrolling drops frames (~28 fps) | 8 | 2 | 0.7 | 3 | **3.7** | Med |
+| 8 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
+| 9 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
+| 10 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
+| 11 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
+| 12 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
+| 13 | Excess composite layers + GPU hacks | 7 | 1 | 0.8 | 2 | **2.8** | Med |
+| 14 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
+| 15 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
+| 16 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
 
 Two things the ranking makes explicit. The single highest-ROI fix is trivial —
 `fetchpriority` + preload on the lead image scores 24 because it's a one-line
@@ -160,6 +163,35 @@ handled correctly — not exposed in production — so that's not a finding here
   - **Solution**:
     - Split by route and lazy-load heavy or rarely-used components on interaction/visibility, so each page ships only the JS it needs.
   - **Priority (RICE)**: R 10 × I 1 × C 0.6 ÷ E 4 = **1.5** (Low).
+
+## Frames and layers
+
+Day 8 pass on the rendering pipeline — critical CSS, the flame chart, and
+compositing. Measured live; see the baseline's rendering/frames/layers section.
+
+- Critical CSS isn't really extracted — the full stylesheet still blocks first paint.
+  - **Baseline**: the head inlines ~145 KB across 19 `<style>` blocks, yet the 801 KB `All.min.css` (88% unused) still loads render-blocking; the trace estimates ~1,166 ms of FCP waiting on it.
+  - **Cause**:
+    - The site pays for inlined CSS *and* a render-blocking full sheet — the inline blocks don't cleanly cover the fold and the big sheet is never deferred.
+  - **Solution**:
+    - Inline only the above-the-fold critical CSS and load the rest non-blocking (preload + swap); split the sheet so a page ships what it renders.
+  - **Priority (RICE)**: R 10 × I 2 × C 0.6 ÷ E 3 = **4.0** (High).
+
+- Scrolling drops frames — about 28 fps under load.
+  - **Baseline**: a scripted scroll on a 4× CPU profile holds only ~28 fps — 41% of frames miss the 16.7 ms budget, 20% exceed 33 ms, and the worst frame stalls 376 ms.
+  - **Cause**:
+    - Scroll-linked forced reflows (first-party `updateScrollShades`, Primis `checkResize`) read layout after DOM writes; a 9,569-node DOM makes each reflow expensive; ~48 ad iframes repaint as they scroll into view. A first-party Puzzmo handler also forces 180 ms of layout at load.
+  - **Solution**:
+    - Batch layout reads before writes to stop the thrashing, cut the DOM size and lazy-mount below-fold ad slots, and throttle scroll handlers to `requestAnimationFrame`.
+  - **Priority (RICE)**: R 8 × I 2 × C 0.7 ÷ E 3 = **3.7** (Med).
+
+- Too many composite layers, plus needless GPU hacks.
+  - **Baseline**: ~48 ad iframes/videos each promote a layer, alongside 5 fixed / 3 sticky / 31 transformed elements; `All.min.css` also carries 3 `translateZ(0)` hacks and 2 `will-change` rules.
+  - **Cause**:
+    - Each layer costs GPU memory and excess layers slow compositing itself; the `translateZ(0)` / `will-change` promotions are always-on and buy nothing when nothing is animating.
+  - **Solution**:
+    - Drop the `translateZ(0)` hacks and apply `will-change` only just before an animation (remove it on `transitionend`); reduce the number of simultaneously-mounted ad iframes.
+  - **Priority (RICE)**: R 7 × I 1 × C 0.8 ÷ E 2 = **2.8** (Med).
 
 ## Mobile
 
