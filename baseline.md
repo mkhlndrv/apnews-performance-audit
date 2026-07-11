@@ -1,9 +1,9 @@
 # Baseline
 
 Primary page: https://apnews.com/. Core Web Vitals and PageSpeed Insights
-captured 3 July 2026 (Lighthouse 13.4.0); networking captured 5 July 2026 and the
-local applied-throttle Lighthouse run 8 July 2026, both from DevTools. Screenshots
-in `screenshots/`.
+captured 3 July 2026 (Lighthouse 13.4.0); networking 5 July 2026, the local
+applied-throttle Lighthouse runs 8 and 11 July 2026, and the WebPageTest run
+11 July 2026. Screenshots in `screenshots/`.
 
 ## Core Web Vitals
 
@@ -56,27 +56,52 @@ Metrics: FCP 6.3 s · LCP 38.6 s · TBT 1,250 ms · CLS 0.001 · Speed Index 17.
 
 Worst on mobile: LCP 38.6 s, Speed Index 17.1 s, FCP 6.3 s, TBT 1,250 ms.
 
-## Local Lighthouse — Applied throttling (mobile)
+## Local Lighthouse — Applied throttling, median of 3 (mobile)
 
-Step 2 of the class method: a local Lighthouse run in DevTools with **applied**
-throttling (the "DevTools throttling" option — Slow 4G + 4× CPU, not simulated),
-to sit next to the PSI mobile column and check it against a second setup.
-Screenshots in `screenshots/04-mobile-throttling/`.
+Step 2 of the class method: local Lighthouse in DevTools with **applied** throttling
+(Slow 4G + 4× CPU, "Simulated throttling" off), run **three times** with the median
+reported. Screenshots in `screenshots/04-mobile-throttling/`.
 
-- **FCP**: 7.2 s
-- **LCP**: 42.3 s
-- **Speed Index**: 25.8 s
-- **CLS**: 0.064
-- **TBT**: did not compute — Lighthouse returned `NO_TTI_CPU_IDLE_PERIOD` (the
-  main thread never went idle), and the overall Performance score errored because
-  "the page loaded too slowly to finish within the time limit."
+| Metric | Run 1 | Run 2 | Run 3 | Median |
+|--------|:-----:|:-----:|:-----:|:------:|
+| Performance | error* | 33 | 33 | **33** |
+| FCP | 7.2 s | 13.0 s | 19.5 s | **13.0 s** |
+| LCP | 42.3 s | 40.2 s | 52.2 s | **42.3 s** |
+| TBT | error* | 1,030 ms | 1,030 ms | **1,030 ms** |
+| CLS | 0.064 | 0.001 | 0 | **0.001** |
+| Speed Index | 25.8 s | 18.9 s | 28.7 s | **25.8 s** |
 
-This lines up with PSI mobile (LCP 42.3 s vs 38.6 s, FCP 7.2 s vs 6.3 s) and goes
-one step further: under the real class throttle the page is so slow that
-Lighthouse can't finish a scored run at all. Two caveats — the run wasn't in a
-fresh Incognito profile (Lighthouse warned about stored IndexedDB data) and it
-timed out before finishing, so it's corroboration of PSI, not a clean
-median-of-3.
+*Run 1 timed out before Lighthouse could compute TBT or the score
+(`NO_TTI_CPU_IDLE_PERIOD` — the main thread never went idle).
+
+The spread is the point: across three identical runs FCP swings 7–20 s and LCP
+40–52 s, which is exactly why the class takes the median of 3 rather than trusting
+one local run. The median (LCP 42 s, FCP 13 s, TBT 1,030 ms) sits alongside PSI
+mobile (LCP 38.6 s, TBT 1,250 ms) and agrees — the throttled-mobile load is
+catastrophic. Runs 2–3 also scored Accessibility 71, Best Practices 77, SEO 85.
+Caveat: the runs weren't in a fresh Incognito profile (Lighthouse flagged stored
+IndexedDB data), so PSI stays the primary number.
+
+## WebPageTest — filmstrip (mobile)
+
+Step 3 of the class method — a WebPageTest run for the waterfall and filmstrip, to
+see when the page becomes usable. Captured 11 July 2026; screenshots in
+`screenshots/06-webpagetest/`.
+
+- **Config**: iPhone 15, Chrome v145, **4G (9 Mbps, 170 ms RTT)**, Tokyo — a faster
+  link than the Slow-4G lab, so these times run lower than PSI/Lighthouse.
+- **Result**: a **Page Load Timeout** — the page never finished inside WebPageTest's
+  budget (Total Time 30.4 s, 537 requests, 8 MB first view).
+- **Metrics**: FCP 3.39 s · LCP 3.39 s · Start Render 3.4 s · Speed Index 8.85 s ·
+  TBT 3.25 s · CLS 0.005 · TTFB 0.56 s.
+- **When does it become usable?** The filmstrip is blank through ~3.4 s (start
+  render) — nothing is visible for the first three-plus seconds — then it fills in
+  but keeps loading past 30 s. WebPageTest's own read: *"8 render-blocking requests…
+  took a long time to become interactive… many render-blocking 3rd-party requests
+  that could be a single point of failure."*
+- **Field (CrUX, 12 Jun – 9 Jul 2026)** shown alongside: FCP 2.22 s, LCP 2.90 s,
+  CLS 0.04, TTFB 0.24 s, INP 0.19 s — real users beat every lab profile, but LCP
+  still lands in "needs improvement."
 
 ## Network Activity
 
@@ -256,8 +281,9 @@ Scores are from PageSpeed Insights, which runs Lighthouse on Google's
 infrastructure — a clean run without local-machine noise, and it applies the same
 Slow 4G + 4× CPU mobile throttle the class specifies. Mobile is weighted as
 primary (mobile-first indexing); since Lighthouse can't measure INP, TBT is the
-lab proxy. The local Lighthouse section is the class's "applied, not simulated"
-throttle run on my own machine; it corroborates PSI but wasn't a clean Incognito
-median-of-3, so PSI stays the primary number. Diagnostics come from the same PSI
+lab proxy. The local Lighthouse and WebPageTest sections are the class's Steps 2 and 3 — an
+applied-throttle median of 3, then a filmstrip run; they corroborate PSI, though
+the local runs weren't in a clean Incognito profile, so PSI stays the primary
+number. Diagnostics come from the same PSI
 report's Insights/Diagnostics; the accessibility failures are from a separate
 Lighthouse accessibility audit of the page.
