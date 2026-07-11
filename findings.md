@@ -40,13 +40,13 @@ aren't scored — they're observations, not work.
 | 4 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
 | 5 | Responsive images set `srcset` but no `sizes` | 9 | 1 | 0.9 | 2 | **4.1** | High |
 | 6 | Critical CSS not extracted; full sheet blocks paint | 10 | 2 | 0.6 | 3 | **4.0** | High |
-| 7 | Scrolling drops frames (~28 fps) | 8 | 2 | 0.7 | 3 | **3.7** | Med |
+| 7 | Page freezes for seconds during load | 8 | 2 | 0.7 | 3 | **3.7** | Med |
 | 8 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
 | 9 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
 | 10 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
 | 11 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
 | 12 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
-| 13 | Excess composite layers + GPU hacks | 7 | 1 | 0.8 | 2 | **2.8** | Med |
+| 13 | 20 composite layers, 814 MB GPU memory | 7 | 1 | 0.8 | 2 | **2.8** | Med |
 | 14 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
 | 15 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
 | 16 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
@@ -167,30 +167,31 @@ handled correctly — not exposed in production — so that's not a finding here
 ## Frames and layers
 
 Day 8 pass on the rendering pipeline — critical CSS, the flame chart, and
-compositing. Measured live; see the baseline's rendering/frames/layers section.
+compositing. From the DevTools captures; see the baseline's rendering/frames/layers
+section and `screenshots/07-frames-layers/`.
 
 - Critical CSS isn't really extracted — the full stylesheet still blocks first paint.
-  - **Baseline**: the head inlines ~145 KB across 19 `<style>` blocks, yet the 801 KB `All.min.css` (88% unused) still loads render-blocking; the trace estimates ~1,166 ms of FCP waiting on it.
+  - **Baseline**: the `<head>` has only a few small inline `<style>` blocks and a font preload — no above-the-fold critical CSS — yet the full `All.min.css` still loads (90% of it unused this run), behind a wall of up-front render-blocking third-party scripts.
   - **Cause**:
-    - The site pays for inlined CSS *and* a render-blocking full sheet — the inline blocks don't cleanly cover the fold and the big sheet is never deferred.
+    - There's no critical-CSS extraction: the whole stylesheet ships on the critical path and (with a stack of third-party scripts in the head) blocks the first paint.
   - **Solution**:
-    - Inline only the above-the-fold critical CSS and load the rest non-blocking (preload + swap); split the sheet so a page ships what it renders.
+    - Inline only the above-the-fold critical CSS and load the rest non-blocking (preload + swap); move the third-party scripts out of the head and defer them.
   - **Priority (RICE)**: R 10 × I 2 × C 0.6 ÷ E 3 = **4.0** (High).
 
-- Scrolling drops frames — about 28 fps under load.
-  - **Baseline**: a scripted scroll on a 4× CPU profile holds only ~28 fps — 41% of frames miss the 16.7 ms budget, 20% exceed 33 ms, and the worst frame stalls 376 ms.
+- The page freezes for seconds during load.
+  - **Baseline**: the Performance Frames track shows a **1,733 ms** frame and then a **5,058 ms** frame during load (long dropped frames); over the ~49 s load the main thread spends 14.5 s scripting and 4.7 s painting.
   - **Cause**:
-    - Scroll-linked forced reflows (first-party `updateScrollShades`, Primis `checkResize`) read layout after DOM writes; a 9,569-node DOM makes each reflow expensive; ~48 ad iframes repaint as they scroll into view. A first-party Puzzmo handler also forces 180 ms of layout at load.
+    - Third-party ad and video scripting saturates the main thread — `[unattributed]` 23 s, ftstatic 2.2 s, ad-score 0.8 s, and LongTail Ad Solutions ships 46 MB of video. First-party JS is only ~0.3 s of it.
   - **Solution**:
-    - Batch layout reads before writes to stop the thrashing, cut the DOM size and lazy-mount below-fold ad slots, and throttle scroll handlers to `requestAnimationFrame`.
+    - Defer and lazy-load the ad/video stack (the video ad especially), break up the long tasks, and cut the number of vendors so the main thread isn't blocked for seconds at a time.
   - **Priority (RICE)**: R 8 × I 2 × C 0.7 ÷ E 3 = **3.7** (Med).
 
-- Too many composite layers, plus needless GPU hacks.
-  - **Baseline**: ~48 ad iframes/videos each promote a layer, alongside 5 fixed / 3 sticky / 31 transformed elements; `All.min.css` also carries 3 `translateZ(0)` hacks and 2 `will-change` rules.
+- 20 composite layers hold 814 MB of GPU memory.
+  - **Baseline**: the Layers panel shows **20 layers using 814 MB**; the document rootScroller alone is 383 MB and carries full-page touch/wheel **slow-scroll regions**. The rest are a video, an iframe, the sticky header, Bounce Exchange scroll-shades and the usablenet widget.
   - **Cause**:
-    - Each layer costs GPU memory and excess layers slow compositing itself; the `translateZ(0)` / `will-change` promotions are always-on and buy nothing when nothing is animating.
+    - The layers are promoted for legitimate reasons (rootScroller, video, iframe, sticky), so the problem is volume and the non-passive scroll handlers, not forced `will-change`/`translateZ` hacks — 814 MB of GPU memory and slow-scroll regions across the whole page.
   - **Solution**:
-    - Drop the `translateZ(0)` hacks and apply `will-change` only just before an animation (remove it on `transitionend`); reduce the number of simultaneously-mounted ad iframes.
+    - Make the scroll listeners passive (`{ passive: true }`) to drop the slow-scroll regions, and cut the number of promoted surfaces (fewer simultaneously-mounted ad/video iframes) to bring the layer memory down.
   - **Priority (RICE)**: R 7 × I 1 × C 0.8 ÷ E 2 = **2.8** (Med).
 
 ## Mobile

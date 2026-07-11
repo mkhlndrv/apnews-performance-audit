@@ -232,48 +232,50 @@ used**.
 
 ## Rendering, frames and layers
 
-Day 8 pass — DevTools Performance flame chart, the Coverage tab and a scripted
-scroll, run through my browser connection on 10 July 2026 (AP isn't
-Cloudflare-blocked, so this is measured directly, not from screenshots).
+Day 8 pass — DevTools Coverage, the Performance flame chart and the Layers panel,
+captured 11 July 2026. Screenshots in `screenshots/07-frames-layers/`.
 
 ### Critical CSS
 
-- The head inlines ~145 KB of CSS across 19 `<style>` blocks, but the full
-  **801 KB `All.min.css` still loads render-blocking** — so the critical-CSS
-  extraction doesn't pay off: the big sheet is never deferred. The trace's
-  RenderBlocking insight estimates **~1,166 ms of FCP** is spent waiting on it.
-- Unused CSS is 88% of `All.min.css` and unused JS is 84% of `All.min.js`
-  (Coverage), and the unused CSS is still fully parsed each load ("parse time
-  scales with total CSS bytes"). Sources are in the bundle analysis above — the
-  monolithic first-party bundles plus third-party video/ad scripts.
+- The `<head>` carries a few small inline `<style>` blocks (a Viafoura font-size
+  override, `:root { --button-border-radius }`) and a font `preload`, but no real
+  above-the-fold critical CSS — the head is dominated by render-blocking third-party
+  scripts loaded up front, and the main `All.min.css` still loads. So critical CSS
+  isn't meaningfully extracted.
+- Coverage this run: **47% of 17.4 MB of JS/CSS used, 9.3 MB unused**. The first-party
+  CSS (`All.min…css`) is **90% unused** (721 KB of 801 KB) and the first-party JS
+  (`All.min…js`) is **83% unused** (378 KB of 456 KB) — all still parsed each load. The
+  biggest unused blocks are third-party video/ad/consent scripts: ntv.io (729 KB
+  unused), reCAPTCHA (589 KB), Primis video (496 + 426 KB), sekindo (469 KB), pubfig,
+  Viafoura, DoubleClick, Bounce Exchange, OneTrust, GTM.
 
 ### Flame chart — frames
 
-- **Load** — lab LCP 1.59 s is **92% render delay** (1,467 ms); the main thread is
-  the bottleneck, not the network. A first-party Puzzmo-promo handler forces
-  **180 ms** of synchronous layout (forced reflow), and third-party ad/video scripts
-  (pub.network, Primis, Viafoura, Google GPT, Kameleoon) each thrash layout on top.
-- **Scroll** (4× CPU) — scrolling the 17,800 px page holds only **~28 fps**: 41% of
-  frames miss the 16.7 ms budget, **20% take over 33 ms** (a dropped frame or more),
-  and the worst frame stalls **376 ms**. The causes are scroll-linked forced reflows
-  (first-party `updateScrollShades`, Primis `checkResize`), a **9,569-node DOM**, and
-  ~48 ad iframes repainting. So yes — frames drop, and for a news homepage the amount
-  is excessive.
+- The Frames track shows the page **stall for whole seconds** during load — a
+  **1,733 ms** frame and then a **5,058 ms** frame (long red frames = dropped). Over
+  the ~49 s load the main thread spends **14.5 s scripting, 4.7 s painting, 2.1 s
+  rendering**. Almost all of it is third-party: `[unattributed]` 23 s, ftstatic 2.2 s,
+  ad-score 0.8 s, DoubleVerify 0.4 s — with LongTail Ad Solutions alone shipping
+  **46 MB** of video; first-party `apnews.com` is only ~0.3 s.
+- So frames aren't just occasionally dropped — the main thread is saturated by
+  ad/video scripting and the page freezes for multiple seconds at a time. For a news
+  homepage that's excessive and directly hurts responsiveness.
 
 ### Layers and animations
 
-- **Paint layers** — the Layers panel isn't reachable through automation, but the
-  promotion triggers are: **48 iframes/videos** (ad slots, each typically its own
-  composite layer), 5 `position: fixed` and 3 `sticky` elements, and 31 elements with
-  a transform — dozens of layers, dominated by ad iframes. Excess layers slow
-  compositing itself.
-- **Needless promotion** — `All.min.css` carries **3 `translateZ(0)` GPU hacks** and
-  2 `will-change` rules (the always-on promotion the lesson warns about); applied
-  broadly they add GPU memory for no animation benefit.
-- **Animation triggers** — 8 `@keyframes`, 13 `animation` and 72 `transition`
-  declarations. The animated properties are mostly `transform`/`opacity` (composite,
-  GPU-friendly), so the animations themselves aren't the jank source — the jank is the
-  layout thrashing and DOM/iframe weight above.
+- **Paint layers** — the Layers panel shows **20 composite layers using 814 MB** of
+  GPU memory. The document rootScroller alone is **383 MB** (compositing reason: "Is
+  the document.rootScroller… a scrollable overflow element using accelerated
+  scrolling"), and it carries **slow-scroll regions** — full-page touch and wheel event
+  handlers — which force non-passive (slow) scrolling. Other layers: a video
+  (1096×618), an iframe (600×500), the sticky header (`.Page-header-stickyWrap`), three
+  Bounce Exchange scroll-shades and the usablenet accessibility widget (`usntA40*`).
+- **What forces them** — the sampled layers are promoted for legitimate reasons
+  (rootScroller/accelerated scrolling, video, iframe, sticky), not obvious
+  `will-change`/`translateZ` hacks; the cost is the sheer **volume (20 layers, 814 MB)**
+  plus the slow-scroll event handlers. Animations: two ran during load (the purple
+  bars), on composite-friendly properties — so the jank is the scripting and layer
+  weight, not the animations themselves.
 
 ## Note on method
 
