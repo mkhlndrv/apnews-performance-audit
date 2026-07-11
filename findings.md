@@ -196,12 +196,17 @@ compositing. Measured live; see the baseline's rendering/frames/layers section.
 ## Mobile
 
 Mobile is Google's primary ranking signal, and Slow 4G + 4× CPU is the condition
-most of AP's audience actually browses under. These findings only appear, or only
-matter, on mobile.
+most of AP's audience browses under. Both scores are recorded (PSI Performance
+31 mobile / 33 desktop). The Day 6 gap metric — mobile TBT ÷ desktop TBT — is
+1,250 ÷ 4,650 = **0.27** here, the reverse of the usual mobile-worse case: the
+throttled mobile load times out before the JS that piles up desktop's TBT even
+runs, so the real mobile penalty shows in the ~5–6× LCP and Speed-Index gap
+instead. Each finding is tagged **mobile-amplified** (worse under throttling) or
+**mobile-exclusive** (only on mobile).
 
 ### Corrective
 
-- On a real mobile connection the page barely loads.
+- On a real mobile connection the page barely loads. *(mobile-amplified)*
   - **Baseline**: throttled-mobile lab (Slow 4G + 4× CPU). PSI mobile LCP 38.6 s, FCP 6.3 s, Speed Index 17.1 s; a local applied-throttle run agrees (LCP 42.3 s, FCP 7.2 s, SI 25.8 s) and is so slow that Lighthouse can't finish a scored run (TBT returns `NO_TTI_CPU_IDLE_PERIOD` — the main thread never goes idle). Desktop lab LCP is 7.1 s — about 6× faster on the same page.
   - **Cause**:
     - The render-blocking chain and the 20.4 MB fresh payload are tolerable on a fast desktop link but collapse on a slow mobile radio with a 4× slower CPU: the lead image is gated behind the whole download, and the main thread never clears.
@@ -209,7 +214,7 @@ matter, on mobile.
     - The rendering and networking fixes elsewhere in this report (inline critical CSS, defer JS, `fetchpriority` on the lead image, cut ad bytes and requests) pay off most here — budget and test against Slow 4G + 4× CPU, not a desktop link.
   - **Priority (RICE)**: R 10 × I 3 × C 0.7 ÷ E 5 = **4.2** (High — an umbrella finding; its effort spans the fixes above, so it's scored as the mobile program overall).
 
-- Tap targets are too small and too close together.
+- Tap targets are too small and too close together. *(mobile-exclusive)*
   - **Baseline**: the Lighthouse accessibility audit flags 49 undersized or crowded touch targets. Mobile-only: a mouse pointer doesn't care, a thumb does.
   - **Cause**:
     - Nav links, share buttons and article-card links are sized and spaced for a cursor, so on a phone they fall under the ~24 px minimum and are easy to mis-tap.
