@@ -327,9 +327,10 @@ region are blank until their JS runs, so on a slow or blocked connection those s
 sit empty while the SSR content around them is instant — and they depend on
 third-party JS for content that could be server-rendered.
 
-### Is it the right choice?
+### Is it a good choice for those pages — and the best one?
 
-For these page types, yes. An article is the same for everyone and changes rarely
+A good choice, and for these two page types about as close to the best as it gets.
+An article is the same for everyone and changes rarely
 after publish, so SSR-once + long edge cache (static-at-the-edge) is the textbook
 fit; the homepage changes with the news cycle, so a short micro-cache over SSR is
 the honest freshness call. This is a per-route strategy done well — so the fix isn't
