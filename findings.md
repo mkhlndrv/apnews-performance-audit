@@ -45,17 +45,20 @@ aren't scored — they're observations, not work.
 | 9 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
 | 10 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
 | 11 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
-| 12 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
-| 13 | 20 composite layers, 814 MB GPU memory | 7 | 1 | 0.8 | 2 | **2.8** | Med |
-| 14 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
-| 15 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
-| 16 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+| 12 | SSR head start spent before page is interactive | 10 | 2 | 0.6 | 4 | **3.0** | Med |
+| 13 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
+| 14 | 20 composite layers, 814 MB GPU memory | 7 | 1 | 0.8 | 2 | **2.8** | Med |
+| 15 | Client-rendered placeholders blank on slow JS | 7 | 1 | 0.7 | 2 | **2.5** | Med |
+| 16 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
+| 17 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
+| 18 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
 
 Two things the ranking makes explicit. The single highest-ROI fix is trivial —
 `fetchpriority` + preload on the lead image scores 24 because it's a one-line
-change straight at the failing metric. And the ad-stack cut (row 9) scores *low*
-not because it doesn't matter — it's the root of the byte weight — but because
-RICE divides by effort and that fix is an org-level, revenue-touching program.
+change straight at the failing metric. And the ad-stack cut ("One visit
+downloads 34 MB", 2.2) scores *low* not because it doesn't matter — it's the root
+of the byte weight — but because RICE divides by effort and that fix is an
+org-level, revenue-touching program.
 Read the low-scorers as "high value, expensive," not "skip."
 
 ## Rendering
@@ -102,6 +105,38 @@ Read the low-scorers as "high value, expensive," not "skip."
   - **Solution**:
     - Paint the article underneath the modal immediately, load the consent script without blocking render, and hold non-essential vendors until after the user chooses.
   - **Priority (RICE)**: R 7 × I 2 × C 0.6 ÷ E 3 = **2.8** (Med).
+
+## Rendering strategy
+
+Day 12 pass — fingerprinting where each page renders (view source, JS disabled,
+document response headers) and whether that's the right call. See the
+[baseline](baseline.md) rendering-strategy section and
+`screenshots/08-rendering-strategies/`. The strategy itself is sound, so this set
+is one "good" plus two corrective findings about how the implementation spends it.
+
+### Good
+
+- The rendering strategy is well-matched to each page type.
+  - **Baseline**: articles are server-rendered once and edge-cached for a year (`s-maxage=31536000`, `cf-cache-status: HIT`); the homepage is SSR behind a 120 s micro-cache. Content is in the first response (field TTFB 0.2 s, FCP 1.9–2.0 s), and there's no hydration framework to pay for.
+  - This is a per-route strategy done right: static-at-the-edge for content that doesn't change, short-cached SSR for the news-cycle homepage. A strategy migration is *not* a recommendation — the LCP and TBT problems are image, bundle and ad-stack problems that would survive any rendering change (they're the findings elsewhere in this report), so the honest call is to keep the strategy and fix what sits on top of it.
+
+### Corrective
+
+- The server-rendered head start is spent before the page becomes usable.
+  - **Baseline**: SSR delivers content fast (field FCP 1.9–2.0 s, TTFB 0.2 s) but the page isn't interactive for a further stretch — field INP 155–178 ms (borderline) and lab TBT 1,030 ms mobile / 4,650 ms desktop. Good paint, late interactivity: the SSR uncanny valley.
+  - **Cause**:
+    - AP is SSR with no hydration, yet it behaves like a hydration-heavy app: a large interactive/ad/embed layer (`All.min.js` + ~46 third-party scripts) executes on the main thread after the HTML has already painted, so content is visible seconds before it responds.
+  - **Solution**:
+    - Treat the interactive pieces as islands — initialise widgets and embeds on interaction or when they scroll into view, and defer the third-party stack — so interactive-readiness tracks the fast SSR paint instead of lagging it. This is the Day 12 gradient step (islands before any rewrite); the main-thread mechanics overlap the TBT and frames findings, but the strategy lever here is *where* interactivity is attached, not just *when* the scripts run.
+  - **Priority (RICE)**: R 10 × I 2 × C 0.6 ÷ E 4 = **3.0** (Med).
+
+- Parts of the page are client-rendered placeholders that blank on slow JS.
+  - **Baseline**: `#riverdrop-widget` ships as an empty `<div style="min-height:600px">` filled by a third-party quiz embed, and the `#desktop-entitlements` paywall region is filled client-side — both on the homepage and the article.
+  - **Cause**:
+    - These are CSR islands inside an otherwise server-rendered page: the server sends an empty reserved slot and JS (often third-party) fills it, so the region depends entirely on that script loading and running.
+  - **Solution**:
+    - Server-render the regions that can be (recirculation, entitlement state) and give the rest a static fallback, so a 600 px slot isn't blank while the SSR content around it is instant — the progressive-enhancement baseline from the lesson.
+  - **Priority (RICE)**: R 7 × I 1 × C 0.7 ÷ E 2 = **2.5** (Med).
 
 ## Networking
 

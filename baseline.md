@@ -277,6 +277,66 @@ captured 11 July 2026. Screenshots in `screenshots/07-frames-layers/`.
   bars), on composite-friendly properties — so the jank is the scripting and layer
   weight, not the animations themselves.
 
+## Rendering strategy
+
+Day 12 pass — the three-check fingerprint (view source, then reload with
+JavaScript disabled, then read the document response in the Network panel), run
+per page type rather than once for the whole site. Screenshots in
+`screenshots/08-rendering-strategies/`.
+
+### What's in use, per page
+
+- **Homepage (`/`)** — **server-side rendered**, edge-cached for a short window.
+  The document arrives with the content already in the HTML (29 headings and every
+  story link are in view-source, not injected by JS), the server header is
+  `x-powered-by: Brightspot` (AP runs on the Brightspot Java CMS, not a JS
+  framework), and the markup carries 926 `bsp-` attributes from that CMS. Cloudflare
+  fronts it with `cache-control: public, max-age=120` and returns `cf-cache-status:
+  HIT` — a **120-second micro-cache**. The origin render isn't cheap:
+  `x-envoy-upstream-service-time` runs ~1.4–2.6 s, which is exactly why the
+  micro-cache exists — you don't want to pay that render on every request.
+- **Article (`/article/…`)** — the **same SSR engine, but cached at the edge for a
+  year**. The article response carries `cache-control: public, max-age=30,
+  s-maxage=31536000` with `cf-cache-status: HIT`: the browser revalidates after 30 s
+  but the CDN keeps the rendered HTML for up to a year. In effect an article is
+  **static-at-the-edge** — rendered once by Brightspot, then served like SSG with
+  stale-while-revalidate. The full article body (201 `<p>`) is in the document.
+- **No hydration framework.** There's no `__NEXT_DATA__`, React root, Fusion or
+  serialized-state blob — nothing to hydrate. The client JS (`All.min.js` plus the
+  ~46 third-party scripts) is progressive enhancement and ad/embed code layered on
+  top of already-complete HTML, so the ~1 s TBT is that layer, not a hydration cost.
+- **Client-rendered islands inside the SSR page.** A few regions are left as empty
+  placeholders for JS to fill: `#riverdrop-widget` is an empty
+  `<div style="min-height:600px">` populated by a third-party quiz embed
+  (`client.riverdrop.com`), and `#desktop-entitlements` (the Zephr paywall) is
+  filled client-side. Both appear on the homepage and the article.
+
+### How it affects users, and the tradeoffs
+
+The SSR base is why the server-dependent field numbers are fine: TTFB 0.2 s and FCP
+1.9–2.0 s — content is in the first response, so the browser paints real text early
+instead of waiting on a bundle. The metric signature matches "SSR with a heavy
+client layer," not CSR: fast paint, then a lag before the page is interactive
+(field INP 155–178 ms, borderline; lab TBT 1,030–4,650 ms) — the uncanny-valley
+pattern, here caused by ad/embed JS rather than hydration. The edge caching is the
+other win: the expensive Brightspot render is paid once per 120 s (homepage) or once
+per publish (article), not per visit.
+
+The tradeoff is the CSR islands. The 600 px `riverdrop` region and the paywall
+region are blank until their JS runs, so on a slow or blocked connection those slots
+sit empty while the SSR content around them is instant — and they depend on
+third-party JS for content that could be server-rendered.
+
+### Is it the right choice?
+
+For these page types, yes. An article is the same for everyone and changes rarely
+after publish, so SSR-once + long edge cache (static-at-the-edge) is the textbook
+fit; the homepage changes with the news cycle, so a short micro-cache over SSR is
+the honest freshness call. This is a per-route strategy done well — so the fix isn't
+to change the strategy (the LCP/TBT problems would survive a migration; they're
+image, bundle and ad-stack problems), it's to stop the client layer and the CSR
+islands from spending the SSR head start. See the rendering-strategy findings.
+
 ## Note on method
 
 Scores are from PageSpeed Insights, which runs Lighthouse on Google's
