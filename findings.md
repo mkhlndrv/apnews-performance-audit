@@ -32,26 +32,30 @@ Scales, tuned to this audit:
 Score = (Reach × Impact × Confidence) ÷ Effort. Higher = do sooner. Good findings
 aren't scored — they're observations, not work.
 
-| # | Finding | R | I | C | E | Score | Tier |
-|---|---------|:-:|:-:|:--:|:-:|:-----:|:----:|
-| 1 | Main article image loads late (LCP) | 10 | 3 | 0.8 | 1 | **24.0** | High |
-| 2 | Blank screen before render (FCP) | 10 | 2 | 0.8 | 3 | **5.3** | High |
-| 3 | CSS bundle ships ~770 KB, mostly unused | 10 | 2 | 0.7 | 3 | **4.7** | High |
-| 4 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
-| 5 | Responsive images set `srcset` but no `sizes` | 9 | 1 | 0.9 | 2 | **4.1** | High |
-| 6 | Critical CSS not extracted; full sheet blocks paint | 10 | 2 | 0.6 | 3 | **4.0** | High |
-| 7 | Page freezes for seconds during load | 8 | 2 | 0.7 | 3 | **3.7** | Med |
-| 8 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
-| 9 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
-| 10 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
-| 11 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
-| 12 | SSR head start spent before page is interactive | 10 | 2 | 0.6 | 4 | **3.0** | Med |
-| 13 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
-| 14 | 20 composite layers, 814 MB GPU memory | 7 | 1 | 0.8 | 2 | **2.8** | Med |
-| 15 | Client-rendered placeholders blank on slow JS | 7 | 1 | 0.7 | 2 | **2.5** | Med |
-| 16 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
-| 17 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
-| 18 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+| ID | Finding | R | I | C | E | Score | Tier |
+|----|---------|:-:|:-:|:--:|:-:|:-----:|:----:|
+| F-01 | Main article image loads late (LCP) | 10 | 3 | 0.8 | 1 | **24.0** | High |
+| F-02 | Blank screen before render (FCP) | 10 | 2 | 0.8 | 3 | **5.3** | High |
+| F-03 | CSS bundle ships ~770 KB, mostly unused | 10 | 2 | 0.7 | 3 | **4.7** | High |
+| F-04 | Barely loads on a real mobile connection | 10 | 3 | 0.7 | 5 | **4.2** | High |
+| F-05 | Responsive images set `srcset` but no `sizes` | 9 | 1 | 0.9 | 2 | **4.1** | High |
+| F-06 | Critical CSS not extracted; full sheet blocks paint | 10 | 2 | 0.6 | 3 | **4.0** | High |
+| F-07 | Page freezes for seconds during load | 8 | 2 | 0.7 | 3 | **3.7** | Med |
+| F-08 | Tap targets too small / crowded | 7 | 1 | 1.0 | 2 | **3.5** | Med |
+| F-09 | Images load out of priority order | 8 | 1 | 0.8 | 2 | **3.2** | Med |
+| F-10 | Page unusable while loading (TBT) | 9 | 2 | 0.7 | 4 | **3.2** | Med |
+| F-11 | Controls/images invisible to assistive tech | 3 | 2 | 1.0 | 2 | **3.0** | Med |
+| F-12 | SSR head start spent before page is interactive | 10 | 2 | 0.6 | 4 | **3.0** | Med |
+| F-13 | Consent wall looks broken on first load | 7 | 2 | 0.6 | 3 | **2.8** | Med |
+| F-14 | 20 composite layers, 814 MB GPU memory | 7 | 1 | 0.8 | 2 | **2.8** | Med |
+| F-15 | Client-rendered placeholders blank on slow JS | 7 | 1 | 0.7 | 2 | **2.5** | Med |
+| F-16 | One visit downloads 34 MB | 9 | 2 | 0.6 | 5 | **2.2** | Med |
+| F-17 | First-party JS ships as one un-split bundle | 10 | 1 | 0.6 | 4 | **1.5** | Low |
+| F-18 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
+
+IDs are stable references shared with the stakeholder report
+([stakeholder-report.md](stakeholder-report.md)) — the same ID carries the
+same numbers in both documents; ranks may move if a score is re-argued.
 
 Two things the ranking makes explicit. The single highest-ROI fix is trivial —
 `fetchpriority` + preload on the lead image scores 24 because it's a one-line
