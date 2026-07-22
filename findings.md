@@ -54,8 +54,9 @@ aren't scored — they're observations, not work.
 | F-18 | Repeat visits barely cache | 5 | 1 | 0.6 | 4 | **0.8** | Low |
 
 IDs are stable references shared with the stakeholder report
-([stakeholder-report.md](stakeholder-report.md)) — the same ID carries the
-same numbers in both documents; ranks may move if a score is re-argued.
+([stakeholder-report.md](stakeholder-report.md)) and the implementer notes
+([implementer-notes.md](implementer-notes.md)) — the same ID carries the same
+numbers in every document; ranks may move if a score is re-argued.
 
 Two things the ranking makes explicit. The single highest-ROI fix is trivial —
 `fetchpriority` + preload on the lead image scores 24 because it's a one-line

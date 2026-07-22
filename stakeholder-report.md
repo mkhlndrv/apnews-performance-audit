@@ -4,7 +4,8 @@ This is the decision layer of the audit, written for the people who fund and
 schedule work rather than the people who implement it. It says what the
 performance problems cost the business, what fixing them buys, and in what
 order. The implementer layer — mechanisms, exact fixes, effort basis — is
-[findings.md](findings.md); every claim here traces to it by finding ID
+[implementer-notes.md](implementer-notes.md), with the findings catalog in
+[findings.md](findings.md); every claim here traces to them by finding ID
 (F-01…F-18) with matching numbers, and the measurement conditions are in
 [baseline.md](baseline.md). Measurements: June–July 2026.
 
